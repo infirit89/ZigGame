@@ -19,23 +19,90 @@ const GrindTile = struct {
     };
 };
 const LayerInstance = struct {
-    __identifier: []u8,
-    __type: []u8,
-    __cWid: u32,
-    __cHei: u32,
-    __gridSize: u32,
-    __opacity: u32,
-    __pxTotalOffsetX: u32,
-    __pxTotalOffsetY: u32,
-    __tileSetDefUid: u32,
-    __tilesetRelPath: []u8,
+    identifier: []u8,
+    type: []u8,
+    Width: u32,
+    Height: u32,
+    gridSize: u32,
+    opacity: u32,
+    pxTotalOffsetX: u32,
+    pxTotalOffsetY: u32,
+    tileSetDefUid: u32,
+    tilesetRelativePath: []u8,
     gridTiles: []GrindTile,
 };
 
-const Level = struct {
-    identifier: []u8,
-    layerInstances: []LayerInstance,
+const Direction = enum {
+    West,
+    East,
+    South,
+    North,
 };
+const Neighbour = struct {
+    levelId: []u8,
+    direction: Direction,
+};
+const Level = struct {
+    identifier: []const u8,
+    iid: []const u8,
+    worldX: i64,
+    worldY: i64,
+    Width: i64,
+    Height: i64,
+    layerInstances: ?[]LayerInstance,
+    externalRelativePath: ?[]const u8,
+    neighbours: []Neighbour,
+
+    pub fn format(
+        self: Level,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+
+        try writer.print("Identifier: {s},\n", .{self.identifier});
+        try writer.print("Iid: {s},\n", .{self.iid});
+        try writer.print("WorldX: {},\n", .{self.worldX});
+        try writer.print("WorldY: {},\n", .{self.worldY});
+        try writer.print("Width: {},\n", .{self.Width});
+        try writer.print("Height: {},\n", .{self.Height});
+
+        if (self.layerInstances != null) {
+            unreachable;
+        } else {
+            try writer.print("LayerInstances: null,\n", .{});
+        }
+
+        if (self.externalRelativePath != null) {
+            try writer.print("ExternalRelativePath: {s},\n", .{self.externalRelativePath.?});
+        } else {
+            try writer.print("ExternalRelativePath: null,\n", .{});
+        }
+
+        try writer.print("Neighbours: [],\n", .{});
+    }
+};
+
+const World = struct {
+    levels: std.StringHashMap(Level),
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator) !*World {
+        const world = try allocator.create(World);
+        world.levels = std.StringHashMap(Level).init(allocator);
+        world.allocator = allocator;
+
+        return world;
+    }
+
+    pub fn deinit(self: *World) void {
+        self.levels.deinit();
+        self.allocator.destroy(self);
+    }
+};
+
 pub fn main() !void {
     rl.initWindow(600, 360, "Test window");
     defer rl.closeWindow();
@@ -56,7 +123,34 @@ pub fn main() !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.heap.page_allocator, buffer[0..bytes_read], .{});
     defer parsed.deinit();
     const root = parsed.value;
-    std.debug.print("{s}\n", .{root.object.get("levels").?.array.items[0].object.get("identifier").?.string});
+    const levels = root.object.get("levels");
+    const world = try World.init(std.heap.page_allocator);
+    defer world.deinit();
+
+    for (levels.?.array.items) |item| {
+        const levelObject = item.object;
+        const iid = levelObject.get("iid").?.string;
+        // const layerInstance = levelObject.get("layerInstances") orelse null;
+        const externalRelativePath = levelObject.get("externalRelPath") orelse null;
+        const level: Level = .{
+            .identifier = levelObject.get("identifier").?.string,
+            .iid = iid,
+            .worldX = levelObject.get("worldX").?.integer,
+            .worldY = levelObject.get("worldY").?.integer,
+            .Width = levelObject.get("pxWid").?.integer,
+            .Height = levelObject.get("pxHei").?.integer,
+            .layerInstances = null,
+            .externalRelativePath = if (externalRelativePath != null) externalRelativePath.?.string else null,
+            .neighbours = &[0]Neighbour{},
+        };
+        try world.levels.put(level.iid, level);
+    }
+
+    var it = world.levels.valueIterator();
+    while (it.next()) |value| {
+        std.debug.print("{s}\n", .{value.*});
+    }
+
     const camera: rl.Camera2D = .{
         .zoom = 1.5,
         .offset = rl.Vector2.init(600 * 0.5, 360 * 0.5),
