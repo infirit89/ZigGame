@@ -5,21 +5,21 @@ const utils = @import("utils.zig");
 const Level = lvl.Level;
 
 pub const World = struct {
-    levels: std.StringHashMap(*Level),
+    levels: std.StringArrayHashMap(*Level),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !*World {
         const world = try allocator.create(World);
-        world.levels = std.StringHashMap(*Level).init(allocator);
+        world.levels = std.StringArrayHashMap(*Level).init(allocator);
         world.allocator = allocator;
 
         return world;
     }
 
     pub fn deinit(self: *World) void {
-        var it = self.levels.valueIterator();
+        var it = self.levels.iterator();
         while (it.next()) |value| {
-            value.*.deinit();
+            value.value_ptr.*.deinit();
         }
 
         self.levels.deinit();
@@ -60,15 +60,15 @@ pub const World = struct {
         return world;
     }
 
-    pub fn format(
-        self: World,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        var it = self.levels.valueIterator();
-        while (it.next()) |value| {
-            try writer.print("{}", .{value.*});
-        }
-    }
+    // pub fn format(
+    //     self: World,
+    //     comptime _: []const u8,
+    //     _: std.fmt.FormatOptions,
+    //     writer: anytype,
+    // ) !void {
+    //     var it = self.levels.iterator();
+    //     while (it.next()) |value| {
+    //         try writer.print("{}", .{value.value_ptr.*.*.layerInstances});
+    //     }
+    // }
 };
