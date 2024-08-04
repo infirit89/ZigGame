@@ -28,6 +28,7 @@ pub const Layer = struct {
     gridTiles: []GridTile,
     entities: std.StringHashMap(Entity),
     allocator: std.mem.Allocator,
+    intGrid: []i64,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -35,6 +36,7 @@ pub const Layer = struct {
         layerType: []const u8,
         gridSize: usize,
         entitySize: usize,
+        intGridSize: usize,
     ) !*Layer {
         var layer = try allocator.create(Layer);
         layer.gridTiles = try allocator.alloc(GridTile, gridSize);
@@ -43,6 +45,7 @@ pub const Layer = struct {
         layer.entities = std.StringHashMap(Entity).init(allocator);
         try layer.entities.ensureTotalCapacity(@intCast(entitySize));
 
+        layer.intGrid = try allocator.alloc(i64, intGridSize);
         layer.type = std.meta.stringToEnum(
             LayerType,
             layerType,
@@ -62,6 +65,9 @@ pub const Layer = struct {
         if (self.tilesetRelativePath) |value| {
             self.allocator.free(value);
         }
+
+        self.allocator.free(self.intGrid);
+
         self.allocator.destroy(self);
     }
 
@@ -74,12 +80,14 @@ pub const Layer = struct {
         ).?;
         const gridTiles = layerJsonObject.get("gridTiles").?.array;
         const entities = layerJsonObject.get("entityInstances").?.array;
+        const intGrid = layerJsonObject.get("intGridCsv").?.array;
         var layer = try Layer.init(
             allocator,
             identifier,
             layerType,
             gridTiles.items.len,
             entities.items.len,
+            intGrid.items.len,
         );
 
         switch (tilesetRelativePath) {
@@ -111,6 +119,13 @@ pub const Layer = struct {
         for (entities.items) |value| {
             const entity = try Entity.parse(allocator, value);
             try layer.entities.put(entity.identifier, entity);
+        }
+
+        for (intGrid.items, 0..) |value, i| {
+            switch (value) {
+                .integer => |intGridValue| layer.intGrid[i] = intGridValue,
+                else => {},
+            }
         }
         return layer;
     }
